@@ -1,4 +1,9 @@
-# Dependencies allowed to run install/build scripts (pnpm 10+ blocks them by default).
+# Present to anchor the pnpm root here (a parent lockfile exists in $HOME) and
+# to approve dependency build scripts, which pnpm 10+ blocks by default.
+allowBuilds:
+  sharp: true
+  unrs-resolver: true
+  esbuild: true
 onlyBuiltDependencies:
   - sharp
   - unrs-resolver
