@@ -15,6 +15,17 @@ import { layerManager, enableIntelSet } from "@/src/layers/registry";
 let busy = false;
 
 export function initClickSelect(map: MlMap): void {
+  // click on empty map = dismiss the selected-entity callout (entity/cluster
+  // clicks hit their own layer handlers; this only fires on true empty space)
+  map.on("click", (e: MapMouseEvent) => {
+    const st = useArgusStore.getState();
+    if (!st.selected) return;
+    const hitEntity = map
+      .queryRenderedFeatures(e.point)
+      .some((f) => f.properties && ("layerId" in f.properties || "point_count" in f.properties));
+    if (!hitEntity) st.setSelected(null);
+  });
+
   map.on("contextmenu", (e: MapMouseEvent) => {
     e.preventDefault();
     if (busy) return;

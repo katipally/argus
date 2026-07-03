@@ -27,14 +27,10 @@ export interface AgentCfg {
 interface AgentStore {
   items: ViewItem[];
   busy: boolean;
-  open: boolean;
   cfg: AgentCfg;
   providers: ProviderInfo[];
-  input: string;
   lastUserText: string | null;
 
-  setOpen(o: boolean): void;
-  setInput(s: string): void;
   setCfg(patch: Partial<AgentCfg>): void;
   addCustomProvider(p: { name: string; baseURL: string; protocol: ProviderInfo["protocol"] }): void;
   send(text: string): void;
@@ -181,14 +177,10 @@ export const useAgentStore = create<AgentStore>((set, get) => {
   return {
     items: [],
     busy: false,
-    open: false,
     cfg: savedCfg,
     providers: initialProviders,
-    input: "",
     lastUserText: null,
 
-    setOpen: (o) => set({ open: o }),
-    setInput: (s) => set({ input: s }),
     setCfg: (patch) =>
       set((s) => {
         // No auto-default model: switching provider clears the model so the

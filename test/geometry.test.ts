@@ -26,6 +26,15 @@ describe("geometryBbox — antimeridian", () => {
     expect(b.east).toBeGreaterThanOrEqual(-180);
     expect(bboxWraps(b)).toBe(true);
   });
+
+  it("bufferBbox clamps a near-global bbox to the world instead of inverting it", () => {
+    // world viewport: padding both edges used to wrap them into west>east —
+    // a bbox covering ONLY the Pacific — silently dropping ~99% of features
+    const b = bufferBbox({ west: -180, south: -56, east: 180, north: 90 });
+    expect(b.west).toBe(-180);
+    expect(b.east).toBe(180);
+    expect(bboxWraps(b)).toBe(false);
+  });
 });
 
 import { nightPolygon } from "@/src/map/terminator";

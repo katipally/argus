@@ -10,27 +10,30 @@ import { argusFeature, type ArgusFeature } from "@/src/core/feature";
 import { pointCenter } from "./interactions";
 import { useArgusStore } from "@/src/store/useArgusStore";
 
-const COLOR = "#c9a6ff";
+// World stock indices pinned to their exchanges — live market pulse on the map.
+
+const COLOR = "#5ad8a6";
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 
-const cache = new BboxCache<FeatureCollection>(15 * 60_000);
-const breaker = new CircuitBreaker<FeatureCollection>({ name: "news", cooldownMs: 120_000 });
+const cache = new BboxCache<FeatureCollection>(2 * 60_000);
+const breaker = new CircuitBreaker<FeatureCollection>({ name: "markets", cooldownMs: 120_000 });
 const guarded = createGuardedFetch(cache, breaker);
 
 let render: HotspotRender | null = null;
 
-async function fetchGdelt(): Promise<FeatureCollection> {
-  const res = await fetch("/api/gdelt");
-  if (!res.ok) throw new Error(`gdelt ${res.status}`);
+async function fetchMarkets(): Promise<FeatureCollection> {
+  const res = await fetch("/api/markets");
+  if (!res.ok) throw new Error(`markets ${res.status}`);
   return (await res.json()) as FeatureCollection;
 }
 
-/** Coverage volume → 0–4 (how widely the event is being reported). */
-function volumeSeverity(mentions: number): number {
-  if (mentions >= 50) return 4;
-  if (mentions >= 15) return 3;
-  if (mentions >= 5) return 2;
-  if (mentions >= 2) return 1;
+/** |day move %| → 0–4 so big swings glow hotter. */
+function moveSeverity(pct: number): number {
+  const a = Math.abs(pct);
+  if (a >= 3) return 4;
+  if (a >= 2) return 3;
+  if (a >= 1) return 2;
+  if (a >= 0.4) return 1;
   return 0;
 }
 
@@ -41,58 +44,50 @@ function normalize(fc: FeatureCollection, bbox: ReturnType<typeof bufferBbox>): 
     const p = f.properties ?? {};
     const [lng, lat] = f.geometry.coordinates as number[];
     if (!pointInBbox(lng, lat, bbox)) continue;
-    const mentions = Number(p.mentions) || 1;
+    const pct = Number(p.changePct) || 0;
     const af = argusFeature(lng, lat, {
-      id: String(p.id ?? p.url ?? `${lng},${lat}`),
-      layerId: "news",
-      title: String(p.place ?? "Reported event"),
-      severity: volumeSeverity(mentions),
-      ts: p.date ? Date.parse(gdeltDate(String(p.date))) || undefined : undefined,
-      domain: String(p.domain ?? ""),
-      tone: p.tone != null ? String(p.tone) : "",
-      mentions: String(mentions),
-      url: String(p.url ?? ""),
+      id: String(p.id),
+      layerId: "markets",
+      title: String(p.name ?? "Index"),
+      severity: moveSeverity(pct),
+      ts: Number(p.ts) || undefined,
+      city: String(p.city ?? ""),
+      price: String(p.price ?? ""),
+      changePct: String(pct),
+      currency: String(p.currency ?? ""),
     });
     if (af) out.push(af);
   }
-  return out.slice(0, news.maxFeatures);
-}
-
-/** GDELT DATEADDED is YYYYMMDDHHMMSS — make it ISO-ish for Date.parse. */
-function gdeltDate(d: string): string {
-  if (d.length >= 14) return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}T${d.slice(8, 10)}:${d.slice(10, 12)}:${d.slice(12, 14)}Z`;
-  if (d.length === 8) return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
-  return d;
+  return out;
 }
 
 function describe(f: MapGeoJSONFeature) {
   const p = f.properties ?? {};
-  const tone = p.tone !== "" && p.tone != null ? Number(p.tone) : null;
+  const pct = Number(p.changePct) || 0;
+  const arrow = pct > 0 ? "▲" : pct < 0 ? "▼" : "—";
   return {
-    title: String(p.title ?? "Reported event"),
-    subtitle: `GDELT · ${String(p.domain || "news")}`,
+    title: String(p.title ?? "Index"),
+    subtitle: `${String(p.city ?? "")} · market index`,
     color: COLOR,
     center: pointCenter(f),
-    url: String(p.url ?? ""),
     rows: [
-      ["Coverage", `${p.mentions ?? "—"} mentions`],
-      ["Sentiment", tone == null ? "—" : tone > 1 ? "positive" : tone < -1 ? "negative" : "neutral"],
-      ["Source", String(p.domain || "—")],
+      ["Last", `${Number(p.price).toLocaleString()} ${p.currency ?? ""}`],
+      ["Day", `${arrow} ${pct > 0 ? "+" : ""}${pct.toFixed(2)}%`],
     ] as [string, string][],
   };
 }
 
-export const news: LayerModule = {
-  id: "news",
-  label: "News",
+export const markets: LayerModule = {
+  id: "markets",
+  label: "Markets",
   color: COLOR,
   group: "signals",
   minZoom: 0,
-  maxFeatures: 6000,
+  maxFeatures: 50,
   defaultEnabled: false,
 
   init(map) {
-    render = createHotspotRender(map, { id: "news", color: COLOR, describe, heatUntil: 7, clusterMaxZoom: 9 });
+    render = createHotspotRender(map, { id: "markets", color: COLOR, describe, heatUntil: 0, clusterMaxZoom: 3 });
   },
 
   async update(_vp: Viewport, load: boolean) {
@@ -103,13 +98,13 @@ export const news: LayerModule = {
       store.setLayerRuntime(this.id, { count: 0, status: "idle" });
       return;
     }
-    const { value, status } = await guarded("gdelt", fetchGdelt, EMPTY);
+    const { value, status } = await guarded("markets", fetchMarkets, EMPTY);
     const feats = normalize(value, bufferBbox(aoi.bbox));
     render.setData({ type: "FeatureCollection", features: feats });
     store.setLayerRuntime(this.id, { count: feats.length, status, updatedAt: Date.now() });
   },
 
-  query: () => fetchGdelt(),
+  query: () => fetchMarkets(),
 
   setVisible(visible) {
     render?.setVisible(visible);

@@ -62,6 +62,7 @@ export function attachEntityInteractions(
       title: d.title,
       rows: d.rows,
       color: d.color,
+      hint: "click for details",
     });
   });
   map.on("mouseleave", renderLayerId, () => {

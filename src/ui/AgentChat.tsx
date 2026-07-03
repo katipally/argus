@@ -26,8 +26,12 @@ function deriveActivity(items: ViewItem[]): { label: string; actions: number } {
     if (it.kind === "tool" && it.status === "running") return { label: `${it.name} ${compact(it.input)}`, actions };
     if (it.kind === "subagent" && it.status === "running") return { label: `recon: ${it.task.slice(0, 60)}`, actions };
     if (it.kind === "assistant") {
+      // just the last few words — the pill is a status line, not a transcript
       const t = (it.text || it.reasoning).trim();
-      if (t) return { label: `…${t.slice(-90)}`, actions };
+      if (t) {
+        const words = t.split(/\s+/);
+        return { label: `…${words.slice(-4).join(" ").slice(-48)}`, actions };
+      }
     }
     if (it.kind === "tool") return { label: `${it.name} ✓`, actions };
   }
@@ -49,7 +53,7 @@ export function AgentTicker({ onExpand }: { onExpand: () => void }) {
         title="Show the full transcript"
         className="shrink-0 text-[10px] uppercase tracking-wider text-[var(--color-faint)] hover:text-[var(--color-text)]"
       >
-        ▴ full
+        ▴ history
       </button>
       <button onClick={abort} className="shrink-0 text-[10px] uppercase tracking-wider text-[var(--color-alert)]">
         stop
@@ -58,9 +62,11 @@ export function AgentTicker({ onExpand }: { onExpand: () => void }) {
   );
 }
 
-/** After a turn: just the exchange (question + answer) floating over the map. */
+/** After a turn: just the exchange (question + answer) floating over the map.
+ *  Answer is height-capped and collapsible down to its footer bar. */
 export function FloatingExchange({ onHistory, onDismiss }: { onHistory: () => void; onDismiss: () => void }) {
   const items = useAgentStore((s) => s.items);
+  const [collapsed, setCollapsed] = useState(false); // resets naturally: unmounted while agent works
   let lastUser = -1;
   for (let i = items.length - 1; i >= 0; i--) {
     if (items[i].kind === "user") {
@@ -88,14 +94,22 @@ export function FloatingExchange({ onHistory, onDismiss }: { onHistory: () => vo
         {q}
       </div>
       <div className="w-full self-start overflow-hidden rounded-lg border border-white/10 bg-black/55 backdrop-blur-md">
-        <div className="thin-scroll max-h-[36vh] overflow-y-auto whitespace-pre-wrap px-3.5 py-2.5 text-[12px] leading-relaxed text-[var(--color-text)]">
-          {answer || (error ? "" : "(no reply)")}
-          {error && <span className="block text-[var(--color-alert)]">⚠︎ {error}</span>}
-        </div>
-        <div className="flex items-center gap-3 border-t border-white/10 px-3.5 py-1.5">
+        {!collapsed && (
+          <div className="thin-scroll max-h-[32vh] overflow-y-auto whitespace-pre-wrap px-3.5 py-2.5 text-[12px] leading-relaxed text-[var(--color-text)]">
+            {answer || (error ? "" : "(no reply)")}
+            {error && <span className="block text-[var(--color-alert)]">⚠︎ {error}</span>}
+          </div>
+        )}
+        <div className={`flex items-center gap-3 px-3.5 py-1.5 ${collapsed ? "" : "border-t border-white/10"}`}>
           <span className="text-[10px] uppercase tracking-wider text-[var(--color-faint)]">✦ argus</span>
           {actions > 0 && <span className="tnum text-[10px] text-[var(--color-faint)]">{actions} actions</span>}
           <span className="flex-1" />
+          <button
+            onClick={() => setCollapsed((c) => !c)}
+            className="text-[10px] uppercase tracking-wider text-[var(--color-muted)] hover:text-[var(--color-text)]"
+          >
+            {collapsed ? "▴ expand" : "▾ collapse"}
+          </button>
           <button onClick={onHistory} className="text-[10px] uppercase tracking-wider text-[var(--color-muted)] hover:text-[var(--color-text)]">
             history
           </button>

@@ -9,7 +9,8 @@ import { useArgusStore } from "@/src/store/useArgusStore";
 // Live Wikipedia edit pulse (keyless). Streams geotagged English-Wikipedia
 // article edits from the /api/wikipulse SSE bridge and shows a rolling window
 // of the last few minutes — a real-time map of where the encyclopedia is being
-// written. Global (viewportFallback), so it works at world zoom with no AOI.
+// written. AOI-gated like every other signal: the stream only runs (and edits
+// only render, via the shared region clip) while a region is focused.
 const COLOR = "#facc15";
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 const WINDOW_MS = 8 * 60_000; // keep edits visible for 8 minutes
@@ -129,7 +130,6 @@ export const wikipulse: LayerModule = {
   minZoom: 0,
   maxFeatures: 400,
   defaultEnabled: false,
-  viewportFallback: true, // global live pulse — no AOI needed
 
   init(map) {
     render = createHotspotRender(map, { id: "wikipulse", color: COLOR, describe, heatUntil: 2, clusterMaxZoom: 3 });

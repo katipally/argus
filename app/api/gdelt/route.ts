@@ -12,7 +12,31 @@ import { upstreamFetch, ARGUS_UA } from "@/src/core/upstream";
 // · 34 sources · 35 articles · 36 avgtone · 52 geo-name · 53 country · 56 lat
 // · 57 lon · 60 source-url.
 const LASTUPDATE = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt";
-const MAX = 3000;
+const MAX = 6000;
+const SLICES = 24; // merge the last 24 × 15-min export files ≈ 6h of world news
+
+/** Export files are stamped every 15 min — derive earlier URLs from the latest. */
+function sliceUrls(latest: string): string[] {
+  const m = latest.match(/(\d{14})\.export\.CSV\.zip$/);
+  if (!m) return [latest];
+  const t = m[1];
+  const base = Date.UTC(+t.slice(0, 4), +t.slice(4, 6) - 1, +t.slice(6, 8), +t.slice(8, 10), +t.slice(10, 12), +t.slice(12, 14));
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const urls: string[] = [];
+  for (let i = 0; i < SLICES; i++) {
+    const d = new Date(base - i * 15 * 60_000);
+    const stamp = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`;
+    urls.push(latest.replace(/\d{14}\.export\.CSV\.zip$/, `${stamp}.export.CSV.zip`));
+  }
+  return urls;
+}
+
+async function fetchSlice(url: string): Promise<string> {
+  const zres = await fetch(url, { headers: { "User-Agent": ARGUS_UA }, cache: "no-store", signal: AbortSignal.timeout(10_000) });
+  if (!zres.ok) throw new Error(`${zres.status}`);
+  const files = unzipSync(new Uint8Array(await zres.arrayBuffer()));
+  return strFromU8(Object.values(files)[0] ?? new Uint8Array());
+}
 
 export async function GET() {
   try {
@@ -23,11 +47,10 @@ export async function GET() {
     const url = manifest.split("\n").map((l) => l.trim().split(" ").pop() ?? "").find((u) => u.endsWith("export.CSV.zip"));
     if (!url) return Response.json({ error: "gdelt no export file" }, { status: 502 });
 
-    const zres = await fetch(url, { headers: { "User-Agent": ARGUS_UA }, cache: "no-store", signal: AbortSignal.timeout(10_000) });
-    if (!zres.ok) return Response.json({ error: `gdelt zip ${zres.status}` }, { status: 502 });
-    const buf = new Uint8Array(await zres.arrayBuffer());
-    const files = unzipSync(buf);
-    const csv = strFromU8(Object.values(files)[0] ?? new Uint8Array());
+    // newest slice first, so the URL dedup below keeps the freshest event per article
+    const slices = await Promise.allSettled(sliceUrls(url).map(fetchSlice));
+    const csv = slices.filter((s): s is PromiseFulfilledResult<string> => s.status === "fulfilled").map((s) => s.value).join("\n");
+    if (!csv) return Response.json({ error: "gdelt no slices" }, { status: 502 });
 
     const seen = new Set<string>();
     const features: Feature<Point>[] = [];

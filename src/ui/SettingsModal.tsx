@@ -150,6 +150,77 @@ interface ModelInfo {
   reasoning?: boolean;
 }
 
+interface ComboOpt {
+  id: string;
+  label: string;
+  meta?: string;
+}
+
+// Autocomplete combobox: type to filter, arrows + enter to pick, click to pick.
+// allowFree commits whatever was typed on blur (model ids not in the list).
+function Combo({
+  value,
+  options,
+  placeholder,
+  onPick,
+  allowFree,
+}: {
+  value: string;
+  options: ComboOpt[];
+  placeholder: string;
+  onPick: (id: string) => void;
+  allowFree?: boolean;
+}) {
+  const [q, setQ] = useState<string | null>(null); // null = idle, show value
+  const [hi, setHi] = useState(0);
+  const open = q !== null;
+  const needle = (q ?? "").toLowerCase();
+  const shown = (needle ? options.filter((o) => `${o.label} ${o.id}`.toLowerCase().includes(needle)) : options).slice(0, 40);
+  const display = q ?? (options.find((o) => o.id === value)?.label ?? value);
+
+  const commit = (id: string) => {
+    if (id) onPick(id);
+    setQ(null);
+  };
+
+  return (
+    <div className="relative w-full">
+      <input
+        value={display}
+        placeholder={placeholder}
+        onFocus={() => { setQ(""); setHi(0); }}
+        onChange={(e) => { setQ(e.target.value); setHi(0); }}
+        onBlur={() => { if (allowFree && q) onPick(q.trim()); setQ(null); }}
+        onKeyDown={(e) => {
+          if (!open) return;
+          if (e.key === "ArrowDown") { e.preventDefault(); setHi((h) => Math.min(h + 1, shown.length - 1)); }
+          else if (e.key === "ArrowUp") { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
+          else if (e.key === "Enter") { e.preventDefault(); commit(shown[hi]?.id ?? (allowFree ? q ?? "" : "")); (e.target as HTMLInputElement).blur(); }
+          else if (e.key === "Escape") { setQ(null); (e.target as HTMLInputElement).blur(); }
+        }}
+        className="w-full rounded border border-[var(--color-hairline-strong)] bg-transparent px-2 py-1.5 text-[12px] text-[var(--color-text)]"
+      />
+      {open && shown.length > 0 && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto thin-scroll rounded-md border border-[var(--color-hairline-strong)] bg-[var(--color-surface)] shadow-xl">
+          {shown.map((o, i) => (
+            <button
+              key={o.id}
+              // mousedown fires before the input's blur, so the pick wins
+              onMouseDown={(e) => { e.preventDefault(); commit(o.id); }}
+              onMouseEnter={() => setHi(i)}
+              className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-[11px]"
+              style={{ background: i === hi ? "color-mix(in srgb, var(--color-accent) 16%, transparent)" : "transparent" }}
+            >
+              <span className="truncate text-[var(--color-text)]">{o.label}</span>
+              {o.meta && <span className="tnum shrink-0 text-[10px] text-[var(--color-faint)]">{o.meta}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AiTab() {
   const cfg = useAgentStore((s) => s.cfg);
   const providers = useAgentStore((s) => s.providers);
@@ -162,8 +233,23 @@ function AiTab() {
   const [cn, setCn] = useState("");
   const [cu, setCu] = useState("");
   const [cp, setCp] = useState<"openai" | "anthropic" | "google">("openai");
+  // which built-in providers actually have an .env key (booleans from /api/keys)
+  const [keys, setKeys] = useState<Record<string, boolean> | null>(null);
+
+  useEffect(() => {
+    let stale = false;
+    fetch("/api/keys")
+      .then((r) => r.json())
+      .then((d: { agent?: Record<string, boolean> }) => !stale && setKeys(d.agent ?? {}))
+      .catch(() => !stale && setKeys({}));
+    return () => {
+      stale = true;
+    };
+  }, []);
 
   const provider = providers.find((p) => p.id === cfg.providerId);
+  // only configured-and-ready providers: env key present, keyless, or user-added
+  const ready = providers.filter((p) => p.keyless || p.custom || (keys ? keys[p.id] : true));
 
   // live model list from the provider's own /models endpoint (env key, server-side)
   useEffect(() => {
@@ -198,27 +284,35 @@ function AiTab() {
 
   return (
     <>
-      <Row title="Provider">
-        <select
+      <Row title={`Provider${keys && !ready.length ? " · none configured" : ""}`}>
+        <Combo
           value={cfg.providerId}
-          onChange={(e) => setCfg({ providerId: e.target.value })}
-          className="w-full rounded border border-[var(--color-hairline-strong)] bg-transparent px-2 py-1.5 text-[12px] text-[var(--color-text)] [color-scheme:dark]"
-        >
-          <option value="">— select provider —</option>
-          {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
+          options={ready.map((p) => ({ id: p.id, label: p.name, meta: p.keyless ? "local" : p.custom ? "custom" : "key ✓" }))}
+          placeholder="type to search providers…"
+          onPick={(id) => setCfg({ providerId: id })}
+        />
+        {keys && !ready.length && (
+          <span className="text-[10px] text-[var(--color-warn)]">
+            no provider keys found in .env — add ANTHROPIC_API_KEY, OPENAI_API_KEY, … and restart
+          </span>
+        )}
       </Row>
       <Row title={`Model${loading ? " · fetching live list…" : models.length ? ` · ${models.length} live` : ""}`}>
-        <input
+        <Combo
           value={cfg.model}
-          onChange={(e) => setCfg({ model: e.target.value })}
-          placeholder="model id — pick or type"
-          list="argus-model-options"
-          className="w-full rounded border border-[var(--color-hairline-strong)] bg-transparent px-2 py-1.5 text-[12px] text-[var(--color-text)]"
+          options={
+            models.length
+              ? models.map((m) => ({
+                  id: m.id,
+                  label: m.id,
+                  meta: m.context ? `${Math.round(m.context / 1000)}k` : m.name && m.name !== m.id ? m.name : undefined,
+                }))
+              : options.map((m) => ({ id: m, label: m }))
+          }
+          placeholder="model id — type to search or enter your own"
+          onPick={(id) => setCfg({ model: id })}
+          allowFree
         />
-        <datalist id="argus-model-options">
-          {options.map((m) => <option key={m} value={m} />)}
-        </datalist>
         {hint && <span className="text-[10px] text-[var(--color-warn)]">{hint}</span>}
         {selected && (
           <span className="tnum text-[10px] text-[var(--color-faint)]">

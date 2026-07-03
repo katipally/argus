@@ -210,11 +210,6 @@ export default function Omnibox() {
               </button>
             </span>
           </div>
-          {needsModel && (
-            <button onClick={() => setSettingsTab("ai")} className="border-b border-[var(--color-hairline)] bg-[var(--color-alert)]/10 px-3 py-1.5 text-left text-[11px] text-[var(--color-alert)]">
-              No model selected — open Settings → AI to choose a provider &amp; model ⚙
-            </button>
-          )}
           <AgentMessages />
         </div>
       )}
@@ -227,7 +222,18 @@ export default function Omnibox() {
           onClick={() => setDismissed(false)}
           className="pointer-events-auto mb-2 self-center rounded-full border border-white/10 bg-black/55 px-3 py-1 text-[10px] uppercase tracking-wider text-[var(--color-accent)] backdrop-blur-md hover:brightness-125"
         >
-          ▴ last answer ({agentItems.length})
+          ▴ last answer
+        </button>
+      )}
+
+      {/* shown in EVERY ask view (not just the full transcript) so a missing
+          model is obvious before the first send */}
+      {mode === "ask" && needsModel && (
+        <button
+          onClick={() => setSettingsTab("ai")}
+          className="pointer-events-auto mb-2 rounded-md border border-[var(--color-alert)]/40 bg-[var(--color-alert)]/10 px-3 py-1.5 text-left text-[11px] text-[var(--color-alert)] backdrop-blur-md"
+        >
+          No model selected — open Settings → AI to choose a provider &amp; model ⚙
         </button>
       )}
 

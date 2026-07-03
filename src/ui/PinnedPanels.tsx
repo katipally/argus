@@ -79,6 +79,7 @@ function Pin({ pin, anchor }: { pin: PinnedPanel; anchor: { x: number; y: number
   const movePin = useArgusStore((s) => s.movePin);
   const setSelected = useArgusStore((s) => s.setSelected);
   const drag = useRef<{ startX: number; startY: number; dx: number; dy: number } | null>(null);
+  const [minimized, setMinimized] = useState(false);
   const e = pin.entity;
 
   const onPointerDown = (ev: React.PointerEvent) => {
@@ -113,24 +114,63 @@ function Pin({ pin, anchor }: { pin: PinnedPanel; anchor: { x: number; y: number
         >
           {e.title}
         </button>
-        <button
-          onClick={() => layerManager.flyTo({ center: e.center, zoom: 11 })}
-          className="text-[11px] text-[var(--color-faint)] hover:text-[var(--color-text)]"
-          aria-label="Fly to"
-          title="Fly to"
+        <div
+          className="flex shrink-0 items-center gap-2"
+          onPointerDown={(ev) => ev.stopPropagation() /* buttons never start a drag */}
         >
-          ⌖
-        </button>
-        <button
-          onClick={() => removePin(pin.id)}
-          className="text-[11px] text-[var(--color-faint)] hover:text-[var(--color-alert)]"
-          aria-label="Unpin"
-          title="Unpin"
-        >
-          ✕
-        </button>
+          <button
+            onClick={() => layerManager.flyTo({ center: e.center, zoom: 11 })}
+            className="text-[11px] text-[var(--color-faint)] hover:text-[var(--color-accent)]"
+            aria-label="Fly to"
+            title="Fly to"
+          >
+            ⌖
+          </button>
+          <button
+            onClick={() =>
+              window.dispatchEvent(
+                new CustomEvent("argus:ask", {
+                  detail: `Tell me about this event: "${e.title}" at ${e.center[1].toFixed(2)}, ${e.center[0].toFixed(2)} (${e.subtitle ?? e.layerId}). What's the situation and context?`,
+                }),
+              )
+            }
+            className="text-[11px] text-[var(--color-faint)] hover:text-[var(--color-accent)]"
+            aria-label="Ask Argus"
+            title="Ask Argus"
+          >
+            ✦
+          </button>
+          {e.url && (
+            <a
+              href={e.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] text-[var(--color-faint)] hover:text-[var(--color-accent)]"
+              aria-label="Open source"
+              title="Open source"
+            >
+              ↗
+            </a>
+          )}
+          <button
+            onClick={() => setMinimized((m) => !m)}
+            className="text-[11px] text-[var(--color-faint)] hover:text-[var(--color-text)]"
+            aria-label={minimized ? "Expand" : "Minimize"}
+            title={minimized ? "Expand" : "Minimize"}
+          >
+            {minimized ? "▢" : "—"}
+          </button>
+          <button
+            onClick={() => removePin(pin.id)}
+            className="text-[11px] text-[var(--color-faint)] hover:text-[var(--color-alert)]"
+            aria-label="Unpin"
+            title="Unpin"
+          >
+            ✕
+          </button>
+        </div>
       </div>
-      {e.embedUrl ? (
+      {minimized ? null : e.embedUrl ? (
         <div className="aspect-video w-full bg-black">
           <iframe
             src={e.embedUrl}

@@ -15,6 +15,8 @@ export interface HoverInfo {
   title: string;
   rows: [string, string][];
   color: string;
+  /** Affordance line at the tooltip's foot, e.g. "click for details". */
+  hint?: string;
 }
 
 export interface EntityInfo {

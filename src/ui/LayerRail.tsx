@@ -12,12 +12,14 @@ const STATUS: Record<string, string> = {
   idle: "#2b333d",
 };
 
+// priority order: live signals first (news/markets — the reason Argus is open),
+// then movement and ground; hazards/weather are situational extras at the bottom
 const GROUPS: [string, string][] = [
-  ["earth", "Earth"],
-  ["sky", "Sky"],
   ["signals", "Signals"],
   ["movement", "Movement"],
   ["ground", "Ground"],
+  ["earth", "Earth"],
+  ["sky", "Sky"],
 ];
 
 export default function LayerRail() {

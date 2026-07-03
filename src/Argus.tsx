@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import type { Map as MlMap } from "maplibre-gl";
 import GlobeMap from "@/src/map/GlobeMap";
 import { initCountries } from "@/src/map/countriesLayer";
@@ -31,9 +31,13 @@ import CommandPalette from "@/src/ui/CommandPalette";
 import PlaybackBar from "@/src/ui/PlaybackBar";
 import ErrorBoundary from "@/src/ui/ErrorBoundary";
 import PinnedPanels from "@/src/ui/PinnedPanels";
+import SelectedCallout from "@/src/ui/SelectedCallout";
+import Preloader from "@/src/ui/Preloader";
 import { layerManager } from "@/src/layers/registry";
 
 export default function Argus() {
+  const [booted, setBooted] = useState(false);
+  const onBootDone = useCallback(() => setBooted(true), []);
   const onMapReady = useCallback((map: MlMap) => {
     void layerManager.start(map);
     // initCountries wires the selection-outline sync + hover preview; picking
@@ -51,6 +55,7 @@ export default function Argus() {
     const w = window as unknown as { argus?: unknown; argusMap?: unknown };
     w.argus = layerManager;
     w.argusMap = map;
+    window.dispatchEvent(new Event("argus:map-ready")); // preloader milestone
   }, []);
 
   return (
@@ -59,7 +64,15 @@ export default function Argus() {
         <GlobeMap onMapReady={onMapReady} />
       </ErrorBoundary>
 
-      <div className="pointer-events-none absolute inset-0 z-10">
+      {/* HUD stays invisible until the preloader hands off, then rises in */}
+      <div
+        className="pointer-events-none absolute inset-0 z-10 transition-all duration-700 ease-out"
+        style={{
+          opacity: booted ? 1 : 0,
+          transform: booted ? "none" : "translateY(8px)",
+          visibility: booted ? "visible" : "hidden",
+        }}
+      >
         <ErrorBoundary name="hud">
           {/* Title */}
           <div className="panel pointer-events-auto absolute left-5 top-5 flex items-center gap-3 px-4 py-2.5">
@@ -84,6 +97,7 @@ export default function Argus() {
           <StatusStrip />
           <RightRail />
           <PinnedPanels />
+          <SelectedCallout />
 
           <Omnibox />
           <CommandPalette />
@@ -98,6 +112,8 @@ export default function Argus() {
           <EventTicker />
         </ErrorBoundary>
       </div>
+
+      <Preloader onDone={onBootDone} />
     </main>
   );
 }

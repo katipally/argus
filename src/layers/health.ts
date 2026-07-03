@@ -71,7 +71,6 @@ export const health: LayerModule = {
   minZoom: 0,
   maxFeatures: 200,
   defaultEnabled: false,
-  viewportFallback: true, // global overview — active without picking an AOI
 
   init(map) {
     render = createHotspotRender(map, { id: "health", color: COLOR, describe, heatUntil: 3, clusterMaxZoom: 3 });

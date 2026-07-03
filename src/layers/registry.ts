@@ -8,6 +8,7 @@ import { ships } from "./ships";
 import { disasters } from "./disasters";
 import { hazards } from "./hazards";
 import { news } from "./news";
+import { markets } from "./markets";
 import { conflict } from "./conflict";
 import { unrest } from "./unrest";
 import { health } from "./health";
@@ -21,6 +22,7 @@ import { fires } from "./fires";
 import { cyclones } from "./cyclones";
 import { launches } from "./launches";
 import { cameras, webcams } from "./cameras";
+import { cables } from "./cables";
 
 /** Single app-wide manager instance; layers register at module load. */
 export const layerManager = new LayerManager();
@@ -37,6 +39,7 @@ layerManager.register(radar);
 layerManager.register(airquality);
 layerManager.register(spacewx);
 layerManager.register(news); // signals
+layerManager.register(markets);
 layerManager.register(conflict);
 layerManager.register(unrest);
 layerManager.register(health);
@@ -47,6 +50,7 @@ layerManager.register(space);
 layerManager.register(launches);
 layerManager.register(cameras); // ground
 layerManager.register(webcams);
+layerManager.register(cables);
 
 // ── default intel set ────────────────────────────────────────────────────────
 // Focusing a region lights these up IF the user has nothing enabled yet — the

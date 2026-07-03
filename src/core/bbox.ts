@@ -158,6 +158,16 @@ export function bufferBbox(b: Bbox, frac = 0.15, minDeg = 1): Bbox {
   const lonSpan = bboxWraps(b) ? b.east + 360 - b.west : b.east - b.west;
   const dx = Math.max(lonSpan * frac, minDeg);
   const dy = Math.max((b.north - b.south) * frac, minDeg);
+  // near-global bbox: padding would wrap BOTH edges and invert the box into its
+  // own complement (a world view becoming "Pacific only") — clamp to full world
+  if (lonSpan + 2 * dx >= 360) {
+    return {
+      west: -180,
+      south: Math.max(-90, b.south - dy),
+      east: 180,
+      north: Math.min(90, b.north + dy),
+    };
+  }
   const west = b.west - dx;
   const east = b.east + dx;
   return {

@@ -3,9 +3,10 @@
 import { useArgusStore } from "@/src/store/useArgusStore";
 
 /**
- * Bottom-left status strip: names every layer currently doing its first fetch,
+ * Top-center status pill: names every layer currently doing its first fetch,
  * so the user always sees "something is happening" rather than empty ground
- * while data streams in. Disappears once nothing is loading.
+ * while data streams in. Disappears once nothing is loading. Lives at the TOP
+ * so the omnibox / agent panels (bottom-center) never cover it.
  */
 export default function SyncIndicator() {
   const layers = useArgusStore((s) => s.layers);
@@ -17,10 +18,10 @@ export default function SyncIndicator() {
   if (loading.length === 0) return null;
 
   return (
-    <div className="panel pointer-events-none absolute bottom-5 left-1/2 flex -translate-x-1/2 translate-y-[-52px] items-center gap-2.5 px-3 py-1.5">
+    <div className="panel pointer-events-none absolute left-1/2 top-16 flex max-w-[60vw] -translate-x-1/2 items-center gap-2.5 px-3 py-1.5">
       <span className="argus-spinner" />
       <span className="label !text-[var(--color-accent)]">syncing</span>
-      <span className="text-[11px] tracking-wide text-[var(--color-muted)]">
+      <span className="truncate text-[11px] tracking-wide text-[var(--color-muted)]">
         {loading.map((l) => l!.label).join(" · ")}
       </span>
     </div>
