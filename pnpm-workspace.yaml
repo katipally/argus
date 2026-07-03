@@ -1,6 +1,5 @@
-allowBuilds:
-  sharp: true
-  unrs-resolver: true
+# Dependencies allowed to run install/build scripts (pnpm 10+ blocks them by default).
 onlyBuiltDependencies:
   - sharp
   - unrs-resolver
+  - esbuild
